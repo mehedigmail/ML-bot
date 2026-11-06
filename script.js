@@ -8,11 +8,14 @@ let requestController = null;
 let lastScannedMinute = null;
 let scanning = false;
 
-// Signal display
+// ======================================
+// SIGNAL DISPLAY
+// ======================================
+
 function showSignal(signal, reason) {
   const el = $("signal");
 
-  const allowed = ["BUY", "SELL", "WAIT"];
+  const allowed = ["CALL", "PUT", "WAIT"];
   const normalized = String(signal || "WAIT").toUpperCase();
 
   const safeSignal = allowed.includes(normalized)
@@ -25,23 +28,30 @@ function showSignal(signal, reason) {
   $("signalReason").textContent = reason || "";
 }
 
-// Backend health check
+// ======================================
+// BACKEND HEALTH CHECK
+// ======================================
+
 async function checkHealth() {
   try {
-    const r = await fetch(`${API_BASE}/api/health`);
-    const d = await r.json();
+    const response = await fetch(
+      `${API_BASE}/api/health`,
+      { signal: AbortSignal.timeout(10000) }
+    );
 
-    const ok =
-      r.ok &&
-      d.status === "ok" &&
-      d.groqConfigured === true &&
-      d.twelveDataConfigured === true;
+    const data = await response.json();
 
-    $("connection").textContent = ok
+    const connected =
+      response.ok &&
+      data.status === "ok" &&
+      data.groqConfigured === true &&
+      data.twelveDataConfigured === true;
+
+    $("connection").textContent = connected
       ? "● Connected"
       : "● API not ready";
 
-    return ok;
+    return connected;
 
   } catch (error) {
     $("connection").textContent = "● Offline";
@@ -49,53 +59,83 @@ async function checkHealth() {
   }
 }
 
-// Automatic market scanning
+// ======================================
+// MARKET SCANNER
+// ======================================
+
 async function scanMarkets() {
   if (!running || scanning) return;
 
   scanning = true;
   requestController = new AbortController();
 
-  showSignal("WAIT", "Scanning all market pairs...");
+  showSignal("WAIT", "Searching six market pairs...");
+
+  $("countdown").textContent = "Scanning...";
 
   try {
-    const response = await fetch(`${API_BASE}/api/scan`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({}),
-      signal: requestController.signal
-    });
+    const response = await fetch(
+      `${API_BASE}/api/scan`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({}),
+        signal: requestController.signal
+      }
+    );
 
     const data = await response.json();
 
-    if (!response.ok || !data.success) {
-      throw new Error(data.error || "Market scan failed.");
+    if (!response.ok || data.success !== true) {
+      throw new Error(
+        data.error || "Market scan failed."
+      );
     }
 
     if (!running) return;
 
+    // Update selected pair
     $("selectedPair").textContent =
       data.symbol || "--";
 
+    // Update market price
     $("price").textContent =
       data.market?.price ?? "--";
 
+    // Update analytical confidence
     $("confidence").textContent =
       `${data.confidence ?? 0}%`;
 
+    // Display actual backend signal
     showSignal(
       data.signal || "WAIT",
-      data.reason || "No analysis explanation."
+      data.reason || "Analysis completed."
     );
 
     $("lastUpdated").textContent =
       "Updated " + new Date().toLocaleTimeString();
 
+    // Show pair scan information in reason if pairs failed
+    if (Array.isArray(data.failedPairs) &&
+        data.failedPairs.length > 0) {
+      $("signalReason").textContent +=
+        ` | Failed pairs: ${data.failedPairs.length}`;
+    }
+
+    $("connection").textContent = "● Connected";
+
   } catch (error) {
+
     if (error.name !== "AbortError" && running) {
-      showSignal("WAIT", error.message);
+      showSignal(
+        "WAIT",
+        `Scan error: ${error.message}`
+      );
+
+      $("connection").textContent =
+        "● Scan error";
     }
 
   } finally {
@@ -104,40 +144,52 @@ async function scanMarkets() {
   }
 }
 
-// Clock and automatic scan timing
+// ======================================
+// CLOCK AND SCAN SCHEDULER
+// ======================================
+
 function updateClock() {
   if (!running) return;
 
   const now = new Date();
   const seconds = now.getSeconds();
 
+  // Scan at second 50 of every minute
   const remaining = 50 - seconds;
 
   $("countdown").textContent =
     remaining > 0
       ? `${remaining}s`
-      : "Scanning...";
+      : scanning
+        ? "Scanning..."
+        : "Waiting...";
 
   if (seconds >= 50) {
 
     const minuteKey =
       `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;
 
-    if (lastScannedMinute !== minuteKey) {
+    if (
+      lastScannedMinute !== minuteKey &&
+      !scanning
+    ) {
       lastScannedMinute = minuteKey;
       scanMarkets();
     }
   }
 }
 
-// Start analysis
+// ======================================
+// START ANALYSIS
+// ======================================
+
 async function startAnalysis() {
   if (running) return;
 
   $("startBtn").disabled = true;
 
   $("signalReason").textContent =
-    "Checking backend...";
+    "Checking backend connection...";
 
   const connected = await checkHealth();
 
@@ -156,20 +208,23 @@ async function startAnalysis() {
   lastScannedMinute = null;
 
   $("stopBtn").disabled = false;
-
   $("startBtn").textContent = "RUNNING";
 
   showSignal(
     "WAIT",
-    "Automatic market scanning started."
+    "Connected. Waiting for automatic scan."
   );
 
+  // Start the clock
   updateClock();
 
-  timer = setInterval(updateClock, 250);
+  timer = setInterval(updateClock, 500);
 }
 
-// Stop analysis
+// ======================================
+// STOP ANALYSIS
+// ======================================
+
 function stopAnalysis() {
   running = false;
 
@@ -188,8 +243,7 @@ function stopAnalysis() {
   $("stopBtn").disabled = true;
   $("startBtn").disabled = false;
 
-  $("startBtn").textContent =
-    "START ANALYSIS";
+  $("startBtn").textContent = "START ANALYSIS";
 
   $("countdown").textContent = "--";
 
@@ -199,7 +253,10 @@ function stopAnalysis() {
   );
 }
 
-// Start and stop buttons
+// ======================================
+// BUTTON EVENTS
+// ======================================
+
 $("startBtn").addEventListener(
   "click",
   startAnalysis
@@ -210,19 +267,28 @@ $("stopBtn").addEventListener(
   stopAnalysis
 );
 
-// Open AI panel
+// ======================================
+// OPEN AI PANEL
+// ======================================
+
 $("launcher").addEventListener("click", () => {
   $("panel").classList.remove("hidden");
   $("launcher").style.display = "none";
 });
 
-// Close AI panel
+// ======================================
+// CLOSE AI PANEL
+// ======================================
+
 $("closeBtn").addEventListener("click", () => {
   $("panel").classList.add("hidden");
   $("launcher").style.display = "block";
 });
 
-// Drag functionality
+// ======================================
+// DRAG FUNCTIONALITY
+// ======================================
+
 function drag(element, handle) {
 
   let x = 0;
