@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#080d18">
   <title>AI Trading Agent</title>
   <link rel="stylesheet" href="style.css">
 </head>
@@ -20,6 +21,7 @@
   </header>
 
   <section class="content">
+
     <div class="line">
       <span>Selected Market</span>
       <b id="selectedPair">Scanning...</b>
@@ -52,12 +54,18 @@
       <button id="stopBtn" class="stop" disabled>STOP</button>
     </div>
 
-    <a class="broker" href="https://quotex.com/en/"
-       target="_blank" rel="noopener noreferrer">
-       OPEN QUOTEX ↗
+    <!-- Direct Quotex navigation -->
+    <a
+      id="openQuotex"
+      class="broker"
+      href="https://qxbroker.com/"
+      target="_top"
+      rel="noopener noreferrer">
+      OPEN QUOTEX ↗
     </a>
 
     <small id="lastUpdated">Not started</small>
+
   </section>
 </main>
 
