@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Trading Agent</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <button id="launcher" class="launcher" aria-label="Open Trading Agent">
+    <span>AI</span>
+  </button>
+
+  <main id="panel" class="panel">
+    <header id="dragHeader" class="header">
+      <div class="brand">
+        <div class="brand-icon">AI</div>
+        <div>
+          <h2>Trading Agent</h2>
+          <small>Live market analysis</small>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="connection" class="status">Checking...</span>
+        <button id="closeBtn" class="close-btn" aria-label="Minimize">−</button>
+      </div>
+    </header>
+
+    <section class="content">
+      <div class="toolbar">
+        <label>
+          Market Pair
+          <select id="symbol">
+            <option value="EUR/USD">EUR/USD</option>
+            <option value="GBP/USD">GBP/USD</option>
+            <option value="USD/JPY">USD/JPY</option>
+            <option value="AUD/USD">AUD/USD</option>
+            <option value="USD/CAD">USD/CAD</option>
+            <option value="EUR/GBP">EUR/GBP</option>
+          </select>
+        </label>
+        <label>
+          Timeframe
+          <select id="timeframe">
+            <option value="1min">1 Minute</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="metrics">
+        <article class="metric">
+          <small>Market Price</small>
+          <strong id="price">--</strong>
+        </article>
+        <article class="metric">
+          <small>Market Trend</small>
+          <strong id="trend">--</strong>
+        </article>
+        <article class="metric">
+          <small>AI Confidence</small>
+          <strong id="confidence">--%</strong>
+        </article>
+      </div>
+
+      <section class="card">
+        <div class="section-title">
+          <h3>Market Indicators</h3>
+          <span>1 MIN</span>
+        </div>
+        <div class="indicators">
+          <div><small>RSI (14)</small><strong id="rsi">--</strong></div>
+          <div><small>EMA Trend</small><strong id="ema">--</strong></div>
+          <div><small>MACD</small><strong id="macd">--</strong></div>
+        </div>
+      </section>
+
+      <section class="signal-card">
+        <div class="section-title">
+          <h3>AI Signal</h3>
+          <span id="aiLabel">GROQ AI</span>
+        </div>
+        <div id="signal" class="signal wait">WAIT</div>
+        <p id="signalReason">Connect the backend to analyze the live market.</p>
+        <div class="signal-details">
+          <div><span>Selected Pair</span><b id="selectedPair">EUR/USD</b></div>
+          <div><span>Expiry Reference</span><b>1 Minute</b></div>
+          <div><span>Data Status</span><b id="dataStatus">Not connected</b></div>
+        </div>
+        <button id="analyzeBtn" class="analyze-btn">Analyze Market</button>
+        <small id="lastUpdated" class="updated">No analysis yet</small>
+      </section>
+
+      <section class="card">
+        <div class="section-title"><h3>Analysis Summary</h3></div>
+        <p id="analysisText" class="analysis-text">
+          No analysis available. Press Analyze Market to request a live analysis.
+        </p>
+      </section>
+
+      <div class="bottom-actions">
+        <a href="https://qx.com/" target="_blank" rel="noopener noreferrer">Open Quotex ↗</a>
+        <button id="refreshBtn" type="button">Refresh Status</button>
+      </div>
+
+      <p class="disclaimer">
+        Signals are analytical estimates, not guaranteed predictions.
+        Confirm the price on your trading platform. This tool does not place trades.
+      </p>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+                                             </html>
+                                             
