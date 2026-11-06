@@ -12,7 +12,8 @@ app.use(express.static(__dirname));
 const PORT = process.env.PORT || 3000;
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TWELVE_DATA_API_KEY = process.env.TWELVE_DATA_API_KEY;
-const GROQ_MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-20b";
+const GROQ_MODEL =
+  process.env.GROQ_MODEL || "openai/gpt-oss-20b";
 
 const AUTO_PAIRS = [
   "EUR/USD",
@@ -23,9 +24,14 @@ const AUTO_PAIRS = [
   "EUR/GBP"
 ];
 
-// Twelve Data candles
+// ==================================
+// TWELVE DATA MARKET DATA
+// ==================================
+
 async function getMarketData(symbol) {
-  const url = new URL("https://api.twelvedata.com/time_series");
+  const url = new URL(
+    "https://api.twelvedata.com/time_series"
+  );
 
   url.searchParams.set("symbol", symbol);
   url.searchParams.set("interval", "1min");
@@ -35,8 +41,15 @@ async function getMarketData(symbol) {
   const response = await fetch(url);
   const data = await response.json();
 
-  if (!response.ok || data.status === "error" || !data.values) {
-    throw new Error(data.message || `Market data unavailable: ${symbol}`);
+  if (
+    !response.ok ||
+    data.status === "error" ||
+    !data.values ||
+    data.values.length < 35
+  ) {
+    throw new Error(
+      data.message || `Market data unavailable: ${symbol}`
+    );
   }
 
   return data.values.reverse().map(c => ({
@@ -48,7 +61,10 @@ async function getMarketData(symbol) {
   }));
 }
 
-// EMA calculation
+// ==================================
+// EMA CALCULATION
+// ==================================
+
 function calculateEMA(values, period) {
   if (values.length < period) return null;
 
@@ -65,55 +81,110 @@ function calculateEMA(values, period) {
   return ema;
 }
 
-// RSI calculation
+function calculateEMAArray(values, period) {
+  const output = Array(values.length).fill(null);
+
+  if (values.length < period) return output;
+
+  const multiplier = 2 / (period + 1);
+
+  let ema = values
+    .slice(0, period)
+    .reduce((sum, value) => sum + value, 0) / period;
+
+  output[period - 1] = ema;
+
+  for (let i = period; i < values.length; i++) {
+    ema = (values[i] - ema) * multiplier + ema;
+    output[i] = ema;
+  }
+
+  return output;
+}
+
+// ==================================
+// RSI CALCULATION
+// ==================================
+
 function calculateRSI(values, period = 14) {
   if (values.length <= period) return null;
 
   let gains = 0;
   let losses = 0;
 
-  for (let i = values.length - period; i < values.length; i++) {
+  for (
+    let i = values.length - period;
+    i < values.length;
+    i++
+  ) {
     const change = values[i] - values[i - 1];
 
-    if (change > 0) gains += change;
-    else losses += Math.abs(change);
+    if (change > 0) {
+      gains += change;
+    } else {
+      losses += Math.abs(change);
+    }
   }
 
-  if (losses === 0) return gains === 0 ? 50 : 100;
+  if (losses === 0) {
+    return gains === 0 ? 50 : 100;
+  }
 
   const averageGain = gains / period;
   const averageLoss = losses / period;
   const rs = averageGain / averageLoss;
 
-  return Number((100 - 100 / (1 + rs)).toFixed(2));
+  return Number(
+    (100 - 100 / (1 + rs)).toFixed(2)
+  );
 }
 
-// MACD calculation
+// ==================================
+// MACD CALCULATION
+// ==================================
+
 function calculateMACD(values) {
   if (values.length < 35) return null;
 
-  const ema12 = calculateEMA(values, 12);
-  const ema26 = calculateEMA(values, 26);
+  const ema12 = calculateEMAArray(values, 12);
+  const ema26 = calculateEMAArray(values, 26);
 
-  if (ema12 === null || ema26 === null) return null;
+  const macdValues = [];
 
-  const macdLine = ema12 - ema26;
+  for (let i = 0; i < values.length; i++) {
+    if (
+      ema12[i] !== null &&
+      ema26[i] !== null
+    ) {
+      macdValues.push(ema12[i] - ema26[i]);
+    }
+  }
 
-  const previousValues = values.slice(0, -1);
-  const previousMacd =
-    calculateEMA(previousValues, 12) -
-    calculateEMA(previousValues, 26);
+  if (macdValues.length < 9) return null;
 
-  const signal = (macdLine + previousMacd) / 2;
+  const signalValues = calculateEMAArray(
+    macdValues,
+    9
+  );
+
+  const line = macdValues[macdValues.length - 1];
+
+  const signal =
+    signalValues[signalValues.length - 1];
 
   return {
-    line: Number(macdLine.toFixed(6)),
+    line: Number(line.toFixed(6)),
     signal: Number(signal.toFixed(6)),
-    histogram: Number((macdLine - signal).toFixed(6))
+    histogram: Number(
+      (line - signal).toFixed(6)
+    )
   };
 }
 
-// All technical indicators
+// ==================================
+// TECHNICAL INDICATORS
+// ==================================
+
 function calculateIndicators(candles) {
   const closes = candles.map(c => c.close);
 
@@ -125,8 +196,11 @@ function calculateIndicators(candles) {
   let emaTrend = "SIDEWAYS";
 
   if (ema9 !== null && ema21 !== null) {
-    if (ema9 > ema21) emaTrend = "BULLISH";
-    if (ema9 < ema21) emaTrend = "BEARISH";
+    if (ema9 > ema21) {
+      emaTrend = "BULLISH";
+    } else if (ema9 < ema21) {
+      emaTrend = "BEARISH";
+    }
   }
 
   return {
@@ -138,24 +212,37 @@ function calculateIndicators(candles) {
   };
 }
 
-// Groq AI analysis
-async function analyzeWithGroq(symbol, candles, indicators) {
+// ==================================
+// GROQ AI ANALYSIS
+// ==================================
+
+async function analyzeWithGroq(
+  symbol,
+  candles,
+  indicators,
+  setup = null
+) {
   const latest = candles[candles.length - 1];
 
   const prompt = `
-You are a cautious financial market analysis assistant.
+You are a careful technical forex market analysis assistant.
 
-Analyze this REAL forex market data for the next 1-minute candle.
+Analyze the REAL market data for the NEXT 1-minute candle.
 
 Pair: ${symbol}
 Latest price: ${latest.close}
+
 RSI(14): ${indicators.rsi}
-EMA trend: ${indicators.emaTrend}
+EMA Trend: ${indicators.emaTrend}
 EMA9: ${indicators.ema9}
 EMA21: ${indicators.ema21}
 MACD: ${JSON.stringify(indicators.macd)}
 
+Technical direction: ${setup?.direction || "NOT PRESELECTED"}
+Matching indicators: ${setup?.score || 0} out of 3
+
 Return ONLY valid JSON:
+
 {
  "signal":"CALL or PUT or WAIT",
  "confidence":0,
@@ -164,10 +251,14 @@ Return ONLY valid JSON:
 }
 
 Rules:
-- Never invent missing market data.
-- If indicators conflict or setup is weak, return WAIT.
+- Analyze all available indicators.
+- Two agreeing indicators can support a directional setup.
+- Consider the technical direction carefully.
+- Do not require all three indicators to agree.
+- Return WAIT if the market is genuinely unclear.
+- Never invent market data.
 - Confidence is analytical confidence, NOT probability of winning.
-- Do not promise profit.
+- Never promise profit.
 `;
 
   const response = await fetch(
@@ -184,9 +275,13 @@ Rules:
         messages: [
           {
             role: "system",
-            content: "Return only valid JSON. Do not use markdown."
+            content:
+              "Return only valid JSON. No markdown."
           },
-          { role: "user", content: prompt }
+          {
+            role: "user",
+            content: prompt
+          }
         ]
       })
     }
@@ -196,13 +291,17 @@ Rules:
 
   if (!response.ok) {
     throw new Error(
-      result.error?.message || "Groq API request failed"
+      result.error?.message ||
+      "Groq API request failed"
     );
   }
 
-  const content = result.choices?.[0]?.message?.content;
+  const content =
+    result.choices?.[0]?.message?.content;
 
-  if (!content) throw new Error("Empty Groq response");
+  if (!content) {
+    throw new Error("Empty Groq response");
+  }
 
   const cleaned = content
     .replace(/```json/gi, "")
@@ -211,7 +310,9 @@ Rules:
 
   const analysis = JSON.parse(cleaned);
 
-  const signal = String(analysis.signal || "WAIT").toUpperCase();
+  const signal = String(
+    analysis.signal || "WAIT"
+  ).toUpperCase();
 
   if (!["CALL", "PUT", "WAIT"].includes(signal)) {
     throw new Error("Invalid AI signal");
@@ -221,25 +322,36 @@ Rules:
     signal,
     confidence: Math.max(
       0,
-      Math.min(100, Number(analysis.confidence) || 0)
+      Math.min(
+        100,
+        Number(analysis.confidence) || 0
+      )
     ),
     trend: analysis.trend || "SIDEWAYS",
-    reason: analysis.reason || "No explanation provided."
+    reason:
+      analysis.reason || "No explanation provided."
   };
 }
 
-// Health API
+// ==================================
+// HEALTH API
+// ==================================
+
 app.get("/api/health", (req, res) => {
   res.json({
     status: "ok",
     message: "AI Trading Agent backend is running",
     twelveDataConfigured: Boolean(TWELVE_DATA_API_KEY),
     groqConfigured: Boolean(GROQ_API_KEY),
-    model: GROQ_MODEL
+    model: GROQ_MODEL,
+    pairs: AUTO_PAIRS
   });
 });
 
-// Single-pair analysis API
+// ==================================
+// SINGLE PAIR ANALYSIS
+// ==================================
+
 app.post("/api/analyze", async (req, res) => {
   try {
     if (!GROQ_API_KEY || !TWELVE_DATA_API_KEY) {
@@ -247,10 +359,18 @@ app.post("/api/analyze", async (req, res) => {
     }
 
     const symbol = req.body.symbol || "EUR/USD";
+
+    if (!AUTO_PAIRS.includes(symbol)) {
+      throw new Error("Unsupported forex pair.");
+    }
+
     const candles = await getMarketData(symbol);
     const indicators = calculateIndicators(candles);
 
-    if (!indicators.macd || indicators.rsi === null) {
+    if (
+      indicators.rsi === null ||
+      !indicators.macd
+    ) {
       throw new Error("Insufficient indicator data.");
     }
 
@@ -281,7 +401,10 @@ app.post("/api/analyze", async (req, res) => {
   }
 });
 
-// Automatic multi-pair scan API
+// ==================================
+// AUTOMATIC MULTI-PAIR SCANNER
+// ==================================
+
 app.post("/api/scan", async (req, res) => {
   try {
     if (!GROQ_API_KEY || !TWELVE_DATA_API_KEY) {
@@ -302,75 +425,148 @@ app.post("/api/scan", async (req, res) => {
           throw new Error("Insufficient indicator data");
         }
 
-        const macd = indicators.macd;
-        let score = 0;
+        // Directional scoring
+        const bullishScore =
+          (indicators.emaTrend === "BULLISH" ? 1 : 0) +
+          (indicators.macd.histogram > 0 ? 1 : 0) +
+          (
+            indicators.rsi > 50 &&
+            indicators.rsi < 70 ? 1 : 0
+          );
 
-        if (indicators.emaTrend === "BULLISH" &&
-            macd.histogram > 0 &&
-            indicators.rsi > 50 && indicators.rsi < 70) {
-          score = 3;
-        } else if (
-          indicators.emaTrend === "BEARISH" &&
-          macd.histogram < 0 &&
-          indicators.rsi < 50 && indicators.rsi > 30
+        const bearishScore =
+          (indicators.emaTrend === "BEARISH" ? 1 : 0) +
+          (indicators.macd.histogram < 0 ? 1 : 0) +
+          (
+            indicators.rsi < 50 &&
+            indicators.rsi > 30 ? 1 : 0
+          );
+
+        let direction = "WAIT";
+
+        const score = Math.max(
+          bullishScore,
+          bearishScore
+        );
+
+        if (
+          bullishScore >= 2 &&
+          bullishScore > bearishScore
         ) {
-          score = 3;
-        } else {
-          score = 0;
+          direction = "CALL";
+        } else if (
+          bearishScore >= 2 &&
+          bearishScore > bullishScore
+        ) {
+          direction = "PUT";
         }
 
-        return { symbol, candles, indicators, score };
+        return {
+          symbol,
+          candles,
+          indicators,
+          direction,
+          score
+        };
       })
     );
 
     const valid = results
       .filter(item => item.status === "fulfilled")
-      .map(item => item.value)
-      .sort((a, b) => b.score - a.score);
+      .map(item => item.value);
+
+    const failedPairs = results
+      .filter(item => item.status === "rejected")
+      .map((item, index) => ({
+        error:
+          item.reason?.message || "Unknown error"
+      }));
 
     if (!valid.length) {
-      throw new Error("No market data available.");
+      throw new Error(
+        "No market data available from any pair."
+      );
     }
 
-    const best = valid[0];
+    const candidates = valid
+      .filter(
+        item =>
+          item.score >= 2 &&
+          item.direction !== "WAIT"
+      )
+      .sort((a, b) => b.score - a.score);
 
-    if (best.score < 3) {
+    // No directional setup
+    if (!candidates.length) {
+      const best = [...valid].sort(
+        (a, b) => b.score - a.score
+      )[0];
+
       return res.json({
         success: true,
         symbol: best.symbol,
         signal: "WAIT",
         confidence: 0,
         trend: "SIDEWAYS",
-        reason: "No strong matching indicator setup found.",
+        reason:
+          "No sufficiently clear directional setup found.",
         market: {
-          price: best.candles[best.candles.length - 1].close
+          price:
+            best.candles[best.candles.length - 1].close
         },
         indicators: best.indicators,
-        scannedPairs: valid.map(x => x.symbol)
+        scannedPairs: valid.map(x => x.symbol),
+        failedPairs,
+        timestamp: new Date().toISOString()
       });
     }
+
+    // Analyze the strongest candidate
+    const best = candidates[0];
 
     const analysis = await analyzeWithGroq(
       best.symbol,
       best.candles,
-      best.indicators
+      best.indicators,
+      {
+        direction: best.direction,
+        score: best.score
+      }
     );
 
-    const latest = best.candles[best.candles.length - 1];
+    const latest =
+      best.candles[best.candles.length - 1];
+
+    // Require AI confirmation
+    const finalSignal =
+      analysis.signal === best.direction
+        ? analysis.signal
+        : "WAIT";
+
+    const finalReason =
+      finalSignal === "WAIT" &&
+      analysis.signal !== "WAIT"
+        ? "AI analysis did not confirm the technical direction."
+        : analysis.reason;
 
     res.json({
       success: true,
       symbol: best.symbol,
-      signal: analysis.signal,
-      confidence: analysis.confidence,
+      signal: finalSignal,
+      confidence:
+        finalSignal === "WAIT"
+          ? 0
+          : analysis.confidence,
       trend: analysis.trend,
-      reason: analysis.reason,
+      reason: finalReason,
       market: {
         price: latest.close,
         datetime: latest.datetime
       },
       indicators: best.indicators,
+      indicatorScore: best.score,
       scannedPairs: valid.map(x => x.symbol),
+      failedPairs,
       timestamp: new Date().toISOString()
     });
 
@@ -380,11 +576,18 @@ app.post("/api/scan", async (req, res) => {
     res.status(502).json({
       success: false,
       signal: "WAIT",
+      confidence: 0,
       error: error.message
     });
   }
 });
 
+// ==================================
+// START SERVER
+// ==================================
+
 app.listen(PORT, () => {
-  console.log(`AI Trading Agent running on port ${PORT}`);
+  console.log(
+    `AI Trading Agent running on port ${PORT}`
+  );
 });
