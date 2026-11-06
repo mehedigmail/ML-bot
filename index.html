@@ -2,21 +2,236 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#080d18">
+
   <title>AI Trading Agent</title>
+
   <link rel="stylesheet" href="style.css">
+
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      min-height: 100%;
+      background: #080d18;
+      color: #ffffff;
+      font-family: Arial, sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+    }
+
+    .launcher {
+      display: none !important;
+    }
+
+    .panel,
+    .panel.hidden {
+      display: flex !important;
+      position: relative !important;
+      inset: auto !important;
+      width: 100% !important;
+      min-height: 100vh;
+      height: auto !important;
+      max-height: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: none !important;
+      border-radius: 0 !important;
+      transform: none !important;
+      flex-direction: column;
+      background: #080d18 !important;
+      box-shadow: none !important;
+      overflow: visible !important;
+    }
+
+    .header {
+      width: 100%;
+      min-height: 85px;
+      padding: 22px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #111a2b;
+      border-bottom: 1px solid #26344c;
+      cursor: default !important;
+    }
+
+    .header b {
+      display: block;
+      font-size: 21px;
+      letter-spacing: 1px;
+    }
+
+    .header small {
+      display: block;
+      margin-top: 7px;
+      font-size: 12px;
+      color: #20d99a;
+    }
+
+    #closeBtn {
+      display: none !important;
+    }
+
+    .content {
+      width: 100%;
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 24px 18px 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .line {
+      min-height: 70px;
+      padding: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #111a2b;
+      border: 1px solid #26344c;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+
+    .line span {
+      color: #aab7ca;
+    }
+
+    .line b,
+    .line strong {
+      font-size: 17px;
+      text-align: right;
+    }
+
+    #signal {
+      font-size: 23px;
+      font-weight: bold;
+    }
+
+    #signal.call {
+      color: #20d99a;
+    }
+
+    #signal.put {
+      color: #ff6178;
+    }
+
+    #signal.wait {
+      color: #ffbd59;
+    }
+
+    #signalReason {
+      width: 100%;
+      min-height: 90px;
+      padding: 20px;
+      margin: 0;
+      background: #111a2b;
+      border: 1px solid #26344c;
+      border-radius: 12px;
+      color: #d0d9e8;
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .buttons {
+      width: 100%;
+      display: flex;
+      gap: 12px;
+    }
+
+    .buttons button {
+      flex: 1;
+      min-height: 58px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .start {
+      background: #20d99a;
+      color: #06150f;
+    }
+
+    .stop {
+      background: #ff6178;
+      color: #ffffff;
+    }
+
+    .buttons button:disabled {
+      opacity: 0.45;
+    }
+
+    .broker {
+      width: 100%;
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 10px;
+      background: #2869e8;
+      color: white;
+      text-decoration: none;
+      font-size: 16px;
+      font-weight: bold;
+    }
+
+    #lastUpdated {
+      display: block;
+      padding: 10px;
+      text-align: center;
+      color: #8b9bb3;
+      font-size: 12px;
+    }
+
+    @media (min-width: 700px) {
+      .content {
+        padding: 35px 28px 50px;
+        gap: 20px;
+      }
+
+      .line {
+        min-height: 85px;
+        padding: 22px;
+        font-size: 18px;
+      }
+
+      .line b,
+      .line strong {
+        font-size: 20px;
+      }
+
+      .header {
+        padding: 25px 35px;
+      }
+    }
+  </style>
 </head>
+
 <body>
 
 <button id="launcher" class="launcher">AI</button>
 
 <main id="panel" class="panel hidden">
+
   <header id="dragHeader" class="header">
     <div>
       <b>AI TRADING BOT</b>
       <small id="connection">Connecting...</small>
     </div>
+
     <button id="closeBtn">−</button>
   </header>
 
@@ -47,14 +262,20 @@
       <b id="countdown">--</b>
     </div>
 
-    <p id="signalReason">Press Start Analysis.</p>
+    <p id="signalReason">
+      Press Start Analysis.
+    </p>
 
     <div class="buttons">
-      <button id="startBtn" class="start">START ANALYSIS</button>
-      <button id="stopBtn" class="stop" disabled>STOP</button>
+      <button id="startBtn" class="start">
+        START ANALYSIS
+      </button>
+
+      <button id="stopBtn" class="stop" disabled>
+        STOP
+      </button>
     </div>
 
-    <!-- Direct Quotex navigation -->
     <a
       id="openQuotex"
       class="broker"
@@ -67,8 +288,10 @@
     <small id="lastUpdated">Not started</small>
 
   </section>
+
 </main>
 
 <script src="script.js"></script>
+
 </body>
 </html>
